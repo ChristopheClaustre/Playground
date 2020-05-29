@@ -68,7 +68,7 @@ namespace CSG
             Mesh mesh = new Mesh();
             mesh.vertices = originalMesh.vertices;
             mesh.normals = originalMesh.normals;
-            //mesh.tangents = originalMesh.tangents;
+            mesh.tangents = originalMesh.tangents;
             mesh.uv = originalMesh.uv;
             for (int i = 0; i < indices.Count; i++)
                 mesh.SetTriangles(indices[i], i);
