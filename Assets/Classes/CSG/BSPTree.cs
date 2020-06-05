@@ -289,25 +289,22 @@ namespace CSG
 
         private Plane ComputeSplittingPlane(BSPNode node, int triangle)
         {
-            Debug.Assert(triangle < node.TrianglesCount);
-
-            int subMesh = 0;
+            int subMeshIndex = 0;
             int firstIndexInSubMesh = triangle * 3;
-            while(subMesh < node.SubMeshCount && firstIndexInSubMesh > node[subMesh].Count)
+            Debug.Assert(firstIndexInSubMesh < node.IndicesCount);
+            while (subMeshIndex < node.SubMeshCount && firstIndexInSubMesh > node[subMeshIndex].Count)
             {
-                firstIndexInSubMesh -= node[subMesh].Count;
-                subMesh++;
+                firstIndexInSubMesh -= node[subMeshIndex].Count;
+                subMeshIndex++;
             }
 
-            var vertices = originalMesh.vertices;
-            var normals = originalMesh.normals;
-
-            var position = (vertices[node[subMesh][firstIndexInSubMesh]] + vertices[node[subMesh][firstIndexInSubMesh+1]] + vertices[node[subMesh][firstIndexInSubMesh+2]]) / 3.0f;
-            var normal = (normals[node[subMesh][firstIndexInSubMesh]] + normals[node[subMesh][firstIndexInSubMesh+1]] + normals[node[subMesh][firstIndexInSubMesh+2]]) / 3.0f;
-            normal.Normalize();
+            var subMesh = node[subMeshIndex];
+            var v0 = originalMesh.vertices[subMesh[firstIndexInSubMesh]];
+            var v1 = originalMesh.vertices[subMesh[firstIndexInSubMesh+1]];
+            var v2 = originalMesh.vertices[subMesh[firstIndexInSubMesh+2]];
 
             Plane plane = new Plane();
-            plane.SetNormalAndPosition(normal, position);
+            plane.Set3Points(v0, v1, v2);
             return plane;
         }
     }
