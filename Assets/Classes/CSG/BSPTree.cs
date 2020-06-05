@@ -197,78 +197,134 @@ namespace CSG
                     }
                     else // SPLITTING
                     {
-                        int[] newIndices = new int[2];
-                        newIndices[0] = originalMesh.vertices.Length + newVertices.Count;
-                        newIndices[1] = newIndices[0]+1;
-
-                        // TODO: si 0 est sur le plan, alors il devient le "aloneVertex" alors qu'il n'est fonctionne en tant que le aloneVertex
-                        // TODO: Sign retourne 1 si 0 -> à checker
-
-                        // which vert is alone on one side of plane ?
-                        int aloneVertex = 2;
-                        if ((Mathf.Sign(distances[0]) != Mathf.Sign(distances[1]))
-                            && Mathf.Sign(distances[0]) != Mathf.Sign(distances[2]))
+                        // SPLIT IN 2 TRIANGLES
+                        if (distances[0] == 0 || distances[1] == 0 || distances[2] == 0)
                         {
-                            aloneVertex = 0;
+                            int newIndex = vertices.Count + newVertices.Count;
+
+                            // which vert is alone on the plane ?
+                            // (At this point, there is one and only one vertex on plane !)
+                            int vertexOnPlane = distances[2] == 0 ? 2 : (distances[1] == 0 ? 1 : 0);
+                            int otherVertex1 = ((vertexOnPlane + 1) % 3);
+                            int otherVertex2 = ((vertexOnPlane + 2) % 3);
+
+                            float absDistanceOtherVertex1 = Mathf.Abs(distances[otherVertex1]);
+                            float delta = absDistanceOtherVertex1 / (absDistanceOtherVertex1 + Mathf.Abs(distances[otherVertex2]));
+                            newVertices.Add(new NewVertex(subMesh[j + otherVertex1], subMesh[j + otherVertex2], delta));
+
+                            //      |  <- plane splitting here
+                            //      A
+                            //    / | \
+                            //   /  |  \
+                            //  /   |   \
+                            // B ___|___ C
+                            //      |
+                            //
+                            //      |
+                            //      v
+                            //
+                            //      A
+                            //    / | \
+                            //   /  |  \
+                            //  /   |   \
+                            // B ___n___ C
+
+                            if (distances[otherVertex1] > 0)
+                            {
+                                plusSubInd.Add(subMesh[j + vertexOnPlane]);
+                                plusSubInd.Add(subMesh[j + otherVertex1]);
+                                plusSubInd.Add(newIndex);
+
+                                minusSubInd.Add(subMesh[j + vertexOnPlane]);
+                                minusSubInd.Add(newIndex);
+                                minusSubInd.Add(subMesh[j + otherVertex2]);
+                            }
+                            else
+                            {
+                                minusSubInd.Add(subMesh[j + vertexOnPlane]);
+                                minusSubInd.Add(subMesh[j + otherVertex1]);
+                                minusSubInd.Add(newIndex);
+
+                                plusSubInd.Add(subMesh[j + vertexOnPlane]);
+                                plusSubInd.Add(newIndex);
+                                plusSubInd.Add(subMesh[j + otherVertex2]);
+                            }
                         }
-                        else
-                        if ((Mathf.Sign(distances[1]) != Mathf.Sign(distances[0]))
-                            && Mathf.Sign(distances[1]) != Mathf.Sign(distances[2]))
+                        else // SPLIT IN 3 TRIANGLES
                         {
-                            aloneVertex = 1;
-                        }
-                        int otherVertex1 = ((aloneVertex + 1) % 3);
-                        int otherVertex2 = ((aloneVertex + 2) % 3);
+                            int[] newIndices = new int[2];
+                            newIndices[0] = vertices.Count + newVertices.Count;
+                            newIndices[1] = newIndices[0] + 1;
 
-                        // prepare the two new vertices
-                        float delta1 = Mathf.Abs(distances[aloneVertex]) / (Mathf.Abs(distances[aloneVertex]) + Mathf.Abs(distances[otherVertex1]));
-                        float delta2 = Mathf.Abs(distances[aloneVertex]) / (Mathf.Abs(distances[aloneVertex]) + Mathf.Abs(distances[otherVertex2]));
-                        newVertices.Add(new NewVertex(subMesh[j + aloneVertex], subMesh[j + otherVertex1], delta1));
-                        newVertices.Add(new NewVertex(subMesh[j + aloneVertex], subMesh[j + otherVertex2], delta2));
+                            // which vert is alone on one side of plane ?
+                            // (At this point, there is an alone vertex !)
+                            int aloneVertex = 0;
+                            if ((distances[0] > 0 && distances[1] > 0)
+                                || (distances[0] < 0 && distances[1] < 0))
+                            {
+                                aloneVertex = 2;
+                            }
+                            else
+                            if ((distances[0] > 0 && distances[2] > 0)
+                                || (distances[0] < 0 && distances[2] < 0))
+                            {
+                                aloneVertex = 1;
+                            }
+                            int otherVertex1 = ((aloneVertex + 1) % 3);
+                            int otherVertex2 = ((aloneVertex + 2) % 3);
+
+                            // prepare the two new vertices
+                            float absDistanceAloneVertex = Mathf.Abs(distances[aloneVertex]);
+                            float delta1 = absDistanceAloneVertex / (absDistanceAloneVertex + Mathf.Abs(distances[otherVertex1]));
+                            float delta2 = absDistanceAloneVertex / (absDistanceAloneVertex + Mathf.Abs(distances[otherVertex2]));
+                            newVertices.Capacity = System.Math.Max(newVertices.Count + 2, newVertices.Capacity);
+                            newVertices.Add(new NewVertex(subMesh[j + aloneVertex], subMesh[j + otherVertex1], delta1));
+                            newVertices.Add(new NewVertex(subMesh[j + aloneVertex], subMesh[j + otherVertex2], delta2));
 
 
-                        //      A
-                        //    /   \
-                        // - / --- \ ---- <- plane splitting here
-                        //  /       \
-                        // B _______ C
-                        //
-                        //      |
-                        //      v
-                        //
-                        //      A
-                        //    /   \
-                        //   n0 _ n1
-                        //  /   \   \
-                        // B _______ C
+                            //      A
+                            //    /   \
+                            // - / --- \ ---- <- plane splitting here
+                            //  /       \
+                            // B _______ C
+                            //
+                            //      |
+                            //      v
+                            //
+                            //      A
+                            //    /   \
+                            //   n0 _ n1
+                            //  /   \   \
+                            // B _______ C
 
-                        if (distances[aloneVertex] >= 0)
-                        {
-                            plusSubInd.Add(subMesh[j + aloneVertex]);
-                            plusSubInd.Add(newIndices[0]);
-                            plusSubInd.Add(newIndices[1]);
+                            if (distances[aloneVertex] >= 0)
+                            {
+                                plusSubInd.Add(subMesh[j + aloneVertex]);
+                                plusSubInd.Add(newIndices[0]);
+                                plusSubInd.Add(newIndices[1]);
 
-                            minusSubInd.Add(newIndices[0]);
-                            minusSubInd.Add(newIndices[1]);
-                            minusSubInd.Add(subMesh[j + otherVertex2]);
+                                minusSubInd.Add(newIndices[1]);
+                                minusSubInd.Add(newIndices[0]);
+                                minusSubInd.Add(subMesh[j + otherVertex2]);
 
-                            minusSubInd.Add(subMesh[j + otherVertex2]);
-                            minusSubInd.Add(newIndices[0]);
-                            minusSubInd.Add(subMesh[j + otherVertex1]);
-                        }
-                        else
-                        {
-                            minusSubInd.Add(subMesh[j + aloneVertex]);
-                            minusSubInd.Add(newIndices[0]);
-                            minusSubInd.Add(newIndices[1]);
+                                minusSubInd.Add(subMesh[j + otherVertex2]);
+                                minusSubInd.Add(newIndices[0]);
+                                minusSubInd.Add(subMesh[j + otherVertex1]);
+                            }
+                            else
+                            {
+                                minusSubInd.Add(subMesh[j + aloneVertex]);
+                                minusSubInd.Add(newIndices[0]);
+                                minusSubInd.Add(newIndices[1]);
 
-                            plusSubInd.Add(newIndices[0]);
-                            plusSubInd.Add(newIndices[1]);
-                            plusSubInd.Add(subMesh[j + otherVertex2]);
+                                plusSubInd.Add(newIndices[1]);
+                                plusSubInd.Add(newIndices[0]);
+                                plusSubInd.Add(subMesh[j + otherVertex2]);
 
-                            plusSubInd.Add(subMesh[j + otherVertex2]);
-                            plusSubInd.Add(newIndices[0]);
-                            plusSubInd.Add(subMesh[j + otherVertex1]);
+                                plusSubInd.Add(subMesh[j + otherVertex2]);
+                                plusSubInd.Add(newIndices[0]);
+                                plusSubInd.Add(subMesh[j + otherVertex1]);
+                            }
                         }
                     }
                 }
