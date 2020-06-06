@@ -335,6 +335,36 @@ namespace CSG
             }
         }
 
+        private int SplitCost(IndicesList indices, Plane plane)
+        {
+            int cost = 0;
+            float[] distances = new float[] { 0, 0, 0 };
+            // Test Split !!!
+            for (int i = 0; i < indices.Count; i++)
+            {
+                var subMesh = indices[i];
+
+                for (int j = 0; j < subMesh.Count; j += 3)
+                {
+                    for (int k = 0; k < 3; k++)
+                    {
+                        distances[k] = plane.GetDistanceToPoint(vertices[subMesh[j + k]]);
+                        distances[k] = (Mathf.Abs(distances[k]) <= precision) ? 0 : distances[k];
+                    }
+
+                    if (!(distances[0] >= 0 && distances[1] >= 0 && distances[2] >= 0)
+                        && !(distances[0] <= 0 && distances[1] <= 0 && distances[2] <= 0))
+                    {
+                        if (distances[0] == 0 || distances[1] == 0 || distances[2] == 0)
+                            cost += 1;
+                        else
+                            cost += 2;
+                    }
+                }
+            }
+
+            return cost;
+        }
         private Plane ChooseSplittingPlane(BSPNode node)
         {
             int nbCandidates = 5;
@@ -344,8 +374,7 @@ namespace CSG
             for(int i = 0; i < nbCandidates && bestResult > 0; i++)
             {
                 Plane candidate = ComputeSplittingPlane(node, Random.Range(0, node.TrianglesCount));
-                Split(node, candidate, out var zero, out var plus, out var minus, out var newVertices);
-                int result = newVertices.Count;
+                int result = SplitCost(node.SubMeshIndices, candidate);
 
                 if (result < bestResult)
                 {
