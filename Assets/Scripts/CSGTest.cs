@@ -1,6 +1,9 @@
 ﻿using UnityEngine;
 using System.Collections;
 using System.Linq;
+using UnityEngine.Profiling;
+using System.Collections.Generic;
+using UnityEditor;
 
 [RequireComponent(typeof(MeshFilter))]
 [RequireComponent(typeof(MeshRenderer))]
@@ -9,6 +12,13 @@ public class CSGTest : MonoBehaviour
     public CSG.BSPTree tree;
     [Range(1, 2000)]
     public int maxTrianglesInLeaves = 1;
+    [Range(5, 50)]
+    public int nbCandidates = 5;
+    [Range(1E-01f, 1E-08f)]
+    public float precision = 1E-06f;
+
+    public bool testBSPTreeTrigger = false;
+    public bool testProfileTrigger = false;
 
     MeshFilter meshFilter;
     MeshRenderer meshRenderer;
@@ -19,7 +29,6 @@ public class CSGTest : MonoBehaviour
         meshFilter = GetComponent<MeshFilter>();
         meshRenderer = GetComponent<MeshRenderer>();
 
-        testBSPTree();
     }
 
     public void testBSPTree()
@@ -28,15 +37,14 @@ public class CSGTest : MonoBehaviour
 
         PrintMesh(mesh);
 
+        var materials = new List<Material>(); meshRenderer.GetSharedMaterials(materials);
         var start = System.DateTime.Now;
-        tree = new CSG.BSPTree(mesh, meshRenderer.sharedMaterials.ToList(), maxTrianglesInLeaves);
+        tree = new CSG.BSPTree(mesh, materials, maxTrianglesInLeaves, nbCandidates, precision);
         Debug.Log("BSPTree created in: " + (System.DateTime.Now - start).TotalMilliseconds + " ms");
         Debug.Log(tree);
         Mesh computedMesh = tree.ComputeMesh();
-        Mesh computedMesh2 = tree.ComputeMesh();
 
         PrintMesh(computedMesh);
-        PrintMesh(computedMesh2);
 
         GameObject go = new GameObject();
         go.AddComponent<MeshFilter>().sharedMesh = computedMesh;
@@ -46,19 +54,36 @@ public class CSGTest : MonoBehaviour
         go.transform.localScale = transform.localScale;
         go.transform.Translate(1.5f, 0, 0);
 
-        GameObject go2 = new GameObject();
-        go2.AddComponent<MeshFilter>().sharedMesh = computedMesh2;
-        go2.AddComponent<MeshRenderer>().sharedMaterials = tree.Materials.ToArray();
-        go2.transform.localPosition = transform.localPosition;
-        go2.transform.localRotation = transform.localRotation;
-        go2.transform.localScale = transform.localScale;
-        go2.transform.Translate(3.0f, 0, 0);
+    }
+
+    public void testProfile()
+    {
+        Mesh mesh = (meshFilter.mesh.vertexCount > 0) ? meshFilter.mesh : meshFilter.sharedMesh;
+
+        Profiler.BeginSample(gameObject.name + ".testProfile()", gameObject);
+        var materials = new List<Material>(); meshRenderer.GetSharedMaterials(materials);
+        var tree = new CSG.BSPTree(mesh, materials, maxTrianglesInLeaves, nbCandidates, precision);
+        Profiler.EndSample();
+
+        EditorApplication.ExitPlaymode();
     }
 
     // Update is called once per frame
     void Update()
     {
+        if (testBSPTreeTrigger)
+        {
+            testBSPTreeTrigger = false;
 
+            testBSPTree();
+        }
+
+        if (testProfileTrigger)
+        {
+            testProfileTrigger = false;
+
+            testProfile();
+        }
     }
 
     public static void PrintMesh(Mesh mesh)
