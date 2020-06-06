@@ -2,6 +2,8 @@
 using System.Collections.Generic;
 using System.Linq;
 
+using IndicesList = System.Collections.Generic.List<System.Collections.Generic.List<int>>;
+
 namespace CSG
 {
     [System.Serializable]
@@ -61,7 +63,7 @@ namespace CSG
             inMesh.GetUVs(0, uvs);
 
             // retrieve indices by submesh index
-            List<List<int>> subMeshIndices = new List<List<int>>();
+            IndicesList subMeshIndices = new IndicesList(inMesh.subMeshCount);
             for (int i = 0; i < inMesh.subMeshCount; i++)
             {
                 Debug.Assert(inMesh.GetTopology(i) == MeshTopology.Triangles, "Only triangle topology is supported by the BSP tree currently.");
@@ -75,7 +77,7 @@ namespace CSG
 
         public Mesh ComputeMesh()
         {
-            List<List<int>> indices = rootNode.GetAllIndices();
+            IndicesList indices = rootNode.GetAllIndices();
 
             Mesh mesh = new Mesh();
             mesh.SetVertices(vertices);
@@ -116,13 +118,11 @@ namespace CSG
                 return;
 
             Plane plane = ChooseSplittingPlane(node);
-            Split(node, plane, out var zeros, out var plus, out var minus, out var newVertices);
+            Split(node.SubMeshIndices, plane, out var zeros, out var plus, out var minus, out var newVertices);
 
             node.Plane = plane;
-            var nPlus = new BSPNode(plus);
-            node.Plus = (nPlus.IndicesCount > 0)? nPlus : null;
-            var nMinus = new BSPNode(minus);
-            node.Minus = (nMinus.IndicesCount > 0) ? nMinus : null;
+            node.Plus = new BSPNode(plus);
+            node.Minus = new BSPNode(minus);
             node.SubMeshIndices = zeros;
 
             // Create the NewVertices
@@ -148,25 +148,25 @@ namespace CSG
             }
         }
 
-        private void Split(BSPNode node, Plane plane, out List<List<int>> zeroIndices, out List<List<int>> plusIndices, out List<List<int>> minusIndices, out List<NewVertex> newVertices)
+        private void Split(IndicesList originalIndices, Plane plane, out IndicesList zeroIndices, out IndicesList plusIndices, out IndicesList minusIndices, out List<NewVertex> newVertices)
         {
-            zeroIndices = new List<List<int>>();
-            plusIndices = new List<List<int>>();
-            minusIndices = new List<List<int>>();
+            zeroIndices = new IndicesList(originalIndices.Count);
+            plusIndices = new IndicesList(originalIndices.Count);
+            minusIndices = new IndicesList(originalIndices.Count);
             newVertices = new List<NewVertex>();
 
+            float[] distances = new float[] { 0, 0, 0 };
             // Now Split !!!
-            for (int i = 0; i < node.SubMeshCount; i++)
+            for (int i = 0; i < originalIndices.Count; i++)
             {
-                var plusSubInd = new List<int>();
-                var zeroSubInd = new List<int>();
-                var minusSubInd = new List<int>();
+                var subMesh = originalIndices[i];
 
-                var subMesh = node[i];
+                var plusSubInd = new List<int>(subMesh.Count);
+                var zeroSubInd = new List<int>(subMesh.Count);
+                var minusSubInd = new List<int>(subMesh.Count);
 
                 for (int j = 0; j < subMesh.Count; j+=3)
                 {
-                    float[] distances = new float[3];
                     for (int k = 0; k < 3; k++)
                     {
                         distances[k] = plane.GetDistanceToPoint(vertices[subMesh[j + k]]);

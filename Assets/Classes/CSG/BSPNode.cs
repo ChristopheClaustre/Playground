@@ -1,6 +1,7 @@
 ﻿using UnityEngine;
 using UnityEditor;
 using System.Collections.Generic;
+using IndicesList = System.Collections.Generic.List<System.Collections.Generic.List<int>>;
 
 namespace CSG
 {
@@ -8,18 +9,18 @@ namespace CSG
     public class BSPNode
     {
         Plane plane;
-        List<List<int>> subMeshIndices; // indices organized by group of three representing a triangle
+        IndicesList subMeshIndices; // indices organized by group of three representing a triangle
         BSPNode plus;
         BSPNode minus;
 
         public Plane Plane
         {
             get => plane;
-            internal set { plane = value; }
+            internal set => plane = value;
         }
 
         // Leaf constructor
-        public BSPNode(List<List<int>> inSubMeshIndices)
+        public BSPNode(IndicesList inSubMeshIndices)
         {
             subMeshIndices = inSubMeshIndices;
 
@@ -105,7 +106,7 @@ namespace CSG
 
         public List<int> this[int i] => subMeshIndices[i];
 
-        public List<List<int>> SubMeshIndices
+        public IndicesList SubMeshIndices
         {
             get => subMeshIndices;
             internal set => subMeshIndices = value;
@@ -114,9 +115,9 @@ namespace CSG
         // UTILS METHODS
 
         // Get all indices lists including children's indices
-        public List<List<int>> GetAllIndices()
+        public IndicesList GetAllIndices()
         {
-            List<List<int>> copy = new List<List<int>>();
+            IndicesList copy = new IndicesList();
             for (int i = 0; i < subMeshIndices.Count; i++)
             {
                 copy.Add(new List<int>());
