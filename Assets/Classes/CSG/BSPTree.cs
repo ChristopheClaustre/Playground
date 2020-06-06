@@ -48,7 +48,7 @@ namespace CSG
         public BSPNode RootNode => rootNode;
         public int Depth => rootNode.Depth;
 
-        public BSPTree(Mesh inMesh, List<Material> inMaterials, int maxTrianglesInLeaves = 1)
+        public BSPTree(Mesh inMesh, List<Material> inMaterials, int maxTrianglesInLeaves = 1, int nbCandidates = 5, float precision = 1E-06f)
         {
             materials = inMaterials;
 
@@ -72,7 +72,7 @@ namespace CSG
 
             rootNode = new BSPNode(subMeshIndices);
 
-            GenerateBSPTree(rootNode, maxTrianglesInLeaves);
+            GenerateBSPTree(rootNode, maxTrianglesInLeaves, nbCandidates, precision);
         }
 
         public Mesh ComputeMesh()
@@ -97,7 +97,7 @@ namespace CSG
 
         // -- UTILS' METHODS FOR THE GENERATION OF A BSPTREE
 
-        private void GenerateBSPTree(BSPNode node, int maxTrianglesInLeaves)
+        private void GenerateBSPTree(BSPNode node, int maxTrianglesInLeaves, int nbCandidates, float precision)
         {
             if (node == null || node.TrianglesCount <= maxTrianglesInLeaves)
             {
@@ -105,21 +105,21 @@ namespace CSG
             }
 
             // Split the node
-            Split(node);
+            Split(node, nbCandidates, precision);
 
             // recurse
-            GenerateBSPTree(node.Plus, maxTrianglesInLeaves);
-            GenerateBSPTree(node.Minus, maxTrianglesInLeaves);
+            GenerateBSPTree(node.Plus, maxTrianglesInLeaves, nbCandidates, precision);
+            GenerateBSPTree(node.Minus, maxTrianglesInLeaves, nbCandidates, precision);
         }
 
-        private void Split(BSPNode node)
+        private void Split(BSPNode node, int nbCandidates, float precision)
         {
             if (node == null)
                 return;
 
-            Plane plane = ChooseSplittingPlane(node);
-            Split(node.SubMeshIndices, plane, out var zeros, out var plus, out var minus, out var newVertices);
-
+            Plane plane = ChooseSplittingPlane(node, nbCandidates, precision);
+            Split(node.SubMeshIndices, plane, precision, out var zeros, out var plus, out var minus, out var newVertices);
+            
             node.Plane = plane;
             node.Plus = new BSPNode(plus);
             node.Minus = new BSPNode(minus);
@@ -148,7 +148,7 @@ namespace CSG
             }
         }
 
-        private void Split(IndicesList originalIndices, Plane plane, out IndicesList zeroIndices, out IndicesList plusIndices, out IndicesList minusIndices, out List<NewVertex> newVertices)
+        private void Split(IndicesList originalIndices, Plane plane, float precision, out IndicesList zeroIndices, out IndicesList plusIndices, out IndicesList minusIndices, out List<NewVertex> newVertices)
         {
             zeroIndices = new IndicesList(originalIndices.Count);
             plusIndices = new IndicesList(originalIndices.Count);
@@ -170,6 +170,7 @@ namespace CSG
                     for (int k = 0; k < 3; k++)
                     {
                         distances[k] = plane.GetDistanceToPoint(vertices[subMesh[j + k]]);
+                        distances[k] = (Mathf.Abs(distances[k]) <= precision) ? 0 : distances[k];
                     }
 
                     // ZERO
@@ -335,7 +336,7 @@ namespace CSG
             }
         }
 
-        private int SplitCost(IndicesList indices, Plane plane)
+        private int SplitCost(IndicesList indices, Plane plane, float precision)
         {
             int cost = 0;
             float[] distances = new float[] { 0, 0, 0 };
@@ -365,16 +366,15 @@ namespace CSG
 
             return cost;
         }
-        private Plane ChooseSplittingPlane(BSPNode node)
-        {
-            int nbCandidates = 5;
 
+        private Plane ChooseSplittingPlane(BSPNode node, int nbCandidates, float precision)
+        {
             Plane bestCandidate = new Plane();
             int bestResult = int.MaxValue;
             for(int i = 0; i < nbCandidates && bestResult > 0; i++)
             {
                 Plane candidate = ComputeSplittingPlane(node, Random.Range(0, node.TrianglesCount));
-                int result = SplitCost(node.SubMeshIndices, candidate);
+                int result = SplitCost(node.SubMeshIndices, candidate, precision);
 
                 if (result < bestResult)
                 {
