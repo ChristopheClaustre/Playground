@@ -1,5 +1,4 @@
 ﻿using UnityEngine;
-using UnityEditor;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -22,9 +21,9 @@ namespace CSG
                 delta01 = inDelta01;
             }
 
-            public T Value<T>(IEnumerable<T> ts)
+            public T Value<T>(List<T> ts)
             {
-                return Value(ts.ElementAt(index0), ts.ElementAt(index1));
+                return Value(ts[index0], ts[index1]);
             }
 
             public T Value<T>(T v0, T v1)
@@ -35,9 +34,13 @@ namespace CSG
             }
         }
 
-        Mesh originalMesh;
         BSPNode rootNode;
         List<Material> materials;
+
+        List<Vector3> vertices;
+        List<Vector3> normals;
+        List<Vector4> tangents;
+        List<Vector2> uvs;
 
         public List<Material> Materials => materials;
         public BSPNode RootNode => rootNode;
@@ -45,8 +48,17 @@ namespace CSG
 
         public BSPTree(Mesh inMesh, List<Material> inMaterials, int maxTrianglesInLeaves = 1)
         {
-            originalMesh = inMesh;
             materials = inMaterials;
+
+            vertices = new List<Vector3>();
+            normals = new List<Vector3>();
+            tangents = new List<Vector4>();
+            uvs = new List<Vector2>();
+
+            inMesh.GetVertices(vertices);
+            inMesh.GetNormals(normals);
+            inMesh.GetTangents(tangents);
+            inMesh.GetUVs(0, uvs);
 
             // retrieve indices by submesh index
             List<List<int>> subMeshIndices = new List<List<int>>();
@@ -66,10 +78,10 @@ namespace CSG
             List<List<int>> indices = rootNode.GetAllIndices();
 
             Mesh mesh = new Mesh();
-            mesh.vertices = originalMesh.vertices;
-            mesh.normals = originalMesh.normals;
-            mesh.tangents = originalMesh.tangents;
-            mesh.uv = originalMesh.uv;
+            mesh.SetVertices(vertices);
+            mesh.SetNormals(normals);
+            mesh.SetTangents(tangents);
+            mesh.SetUVs(0,uvs);
             for (int i = 0; i < indices.Count; i++)
                 mesh.SetTriangles(indices[i], i);
 
@@ -116,10 +128,14 @@ namespace CSG
             // Create the NewVertices
             if (newVertices.Count > 0)
             {
-                var vertices = originalMesh.vertices.ToList();
-                var normals = originalMesh.normals.ToList();
-                var tangents = originalMesh.tangents.ToList();
-                var uvs = originalMesh.uv.ToList();
+                int futureCount = vertices.Count + newVertices.Count;
+                vertices.Capacity = Mathf.Max(vertices.Capacity, futureCount);
+                normals.Capacity = Mathf.Max(normals.Capacity, futureCount);
+                if (tangents.Count > 0)
+                    tangents.Capacity = Mathf.Max(tangents.Capacity, futureCount);
+                if (uvs.Count > 0)
+                    uvs.Capacity = Mathf.Max(uvs.Capacity, futureCount);
+                
                 foreach (var newVertex in newVertices)
                 {
                     vertices.Add(newVertex.Value(vertices));
@@ -129,10 +145,6 @@ namespace CSG
                     if (uvs.Count > 0)
                         uvs.Add(newVertex.Value(uvs));
                 }
-                originalMesh.SetVertices(vertices);
-                originalMesh.SetNormals(normals);
-                originalMesh.SetTangents(tangents);
-                originalMesh.SetUVs(0, uvs);
             }
         }
 
@@ -155,9 +167,10 @@ namespace CSG
                 for (int j = 0; j < subMesh.Count; j+=3)
                 {
                     float[] distances = new float[3];
-                    distances[0] = plane.GetDistanceToPoint(originalMesh.vertices[subMesh[j]]);
-                    distances[1] = plane.GetDistanceToPoint(originalMesh.vertices[subMesh[j+1]]);
-                    distances[2] = plane.GetDistanceToPoint(originalMesh.vertices[subMesh[j+2]]);
+                    for (int k = 0; k < 3; k++)
+                    {
+                        distances[k] = plane.GetDistanceToPoint(vertices[subMesh[j + k]]);
+                    }
 
                     // ZERO
                     if (distances[0] == 0
@@ -299,9 +312,9 @@ namespace CSG
             }
 
             var subMesh = node[subMeshIndex];
-            var v0 = originalMesh.vertices[subMesh[firstIndexInSubMesh]];
-            var v1 = originalMesh.vertices[subMesh[firstIndexInSubMesh+1]];
-            var v2 = originalMesh.vertices[subMesh[firstIndexInSubMesh+2]];
+            var v0 = vertices[subMesh[firstIndexInSubMesh]];
+            var v1 = vertices[subMesh[firstIndexInSubMesh+1]];
+            var v2 = vertices[subMesh[firstIndexInSubMesh+2]];
 
             Plane plane = new Plane();
             plane.Set3Points(v0, v1, v2);
