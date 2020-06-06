@@ -374,14 +374,20 @@ namespace CSG
             for(int i = 0; i < nbCandidates && bestResult > 0; i++)
             {
                 Plane candidate = ComputeSplittingPlane(node, Random.Range(0, node.TrianglesCount));
-                int result = SplitCost(node.SubMeshIndices, candidate, precision);
-
-                if (result < bestResult)
+                if (candidate.normal != Vector3.zero)
                 {
-                    bestCandidate = candidate;
-                    bestResult = result;
+                    int result = SplitCost(node.SubMeshIndices, candidate, precision);
+
+                    if (result < bestResult)
+                    {
+                        bestCandidate = candidate;
+                        bestResult = result;
+                    }
                 }
             }
+            if (bestCandidate.normal == Vector3.zero)
+                throw new UnityException("Impossible to compute a plane at depth " + Depth + ". Try to increase precision or number of candidates.");
+
             return bestCandidate;
         }
 
