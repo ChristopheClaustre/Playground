@@ -10,7 +10,7 @@ namespace CSG
     public class BSPTree
     {
         // Struct to create later a new vertex
-        private struct NewVertex
+        internal struct NewVertex
         {
             int index0;
             int index1;
@@ -39,40 +39,57 @@ namespace CSG
         BSPNode rootNode;
         List<Material> materials;
 
-        List<Vector3> vertices;
+        internal List<Vector3> vertices;
         List<Vector3> normals;
         List<Vector4> tangents;
         List<Vector2> uvs;
 
         public List<Material> Materials => materials;
         public BSPNode RootNode => rootNode;
-        public int Depth => rootNode.Depth;
+        public int Depth => rootNode == null ? 0 : rootNode.Depth;
 
-        public BSPTree(Mesh inMesh, List<Material> inMaterials, int maxTrianglesInLeaves = 1, int nbCandidates = 5, float precision = 1E-06f)
+        public BSPTree()
         {
+            materials = null;
+            vertices = null;
+            normals = null;
+            tangents = null;
+            uvs = null;
+
+            rootNode = null;
+        }
+
+        internal void SetData(List<Vector3> inVertices, List<Vector3> inNormals, List<Vector4> inTangents, List<Vector2> inUVs, BSPNode inRootNode, List<Material> inMaterials)
+        {
+            vertices = inVertices;
+            normals = inNormals;
+            tangents = inTangents;
+            uvs = inUVs;
+
             materials = inMaterials;
 
-            vertices = new List<Vector3>();
-            normals = new List<Vector3>();
-            tangents = new List<Vector4>();
-            uvs = new List<Vector2>();
+            rootNode = inRootNode;
+        }
 
-            inMesh.GetVertices(vertices);
-            inMesh.GetNormals(normals);
-            inMesh.GetTangents(tangents);
-            inMesh.GetUVs(0, uvs);
+        internal void AddData(List<NewVertex> newVertices)
+        {
+            int futureCount = vertices.Count + newVertices.Count;
+            vertices.Capacity = Mathf.Max(vertices.Capacity, futureCount);
+            normals.Capacity = Mathf.Max(normals.Capacity, futureCount);
+            if (tangents.Count > 0)
+                tangents.Capacity = Mathf.Max(tangents.Capacity, futureCount);
+            if (uvs.Count > 0)
+                uvs.Capacity = Mathf.Max(uvs.Capacity, futureCount);
 
-            // retrieve indices by submesh index
-            IndicesList subMeshIndices = new IndicesList(inMesh.subMeshCount);
-            for (int i = 0; i < inMesh.subMeshCount; i++)
+            foreach (var newVertex in newVertices)
             {
-                Debug.Assert(inMesh.GetTopology(i) == MeshTopology.Triangles, "Only triangle topology is supported by the BSP tree currently.");
-                subMeshIndices.Add(inMesh.GetTriangles(i).ToList());
+                vertices.Add(newVertex.Value(vertices));
+                normals.Add(newVertex.Value(normals).normalized);
+                if (tangents.Count > 0)
+                    tangents.Add(newVertex.Value(tangents).normalized);
+                if (uvs.Count > 0)
+                    uvs.Add(newVertex.Value(uvs));
             }
-
-            rootNode = new BSPNode(subMeshIndices);
-
-            GenerateBSPTree(rootNode, maxTrianglesInLeaves, nbCandidates, precision);
         }
 
         public Mesh ComputeMesh()
@@ -93,323 +110,6 @@ namespace CSG
         public override string ToString()
         {
             return "Depth: " + Depth + "\n" + rootNode.ToString();
-        }
-
-        // -- UTILS' METHODS FOR THE GENERATION OF A BSPTREE
-
-        private void GenerateBSPTree(BSPNode node, int maxTrianglesInLeaves, int nbCandidates, float precision)
-        {
-            if (node == null || node.TrianglesCount <= maxTrianglesInLeaves)
-            {
-                return; // return without splitting, it's a leaf
-            }
-
-            // Split the node
-            Split(node, nbCandidates, precision);
-
-            // recurse
-            GenerateBSPTree(node.Plus, maxTrianglesInLeaves, nbCandidates, precision);
-            GenerateBSPTree(node.Minus, maxTrianglesInLeaves, nbCandidates, precision);
-        }
-
-        private void Split(BSPNode node, int nbCandidates, float precision)
-        {
-            if (node == null)
-                return;
-
-            Plane plane = ChooseSplittingPlane(node, nbCandidates, precision);
-            Split(node.SubMeshIndices, plane, precision, out var zeros, out var plus, out var minus, out var newVertices);
-            
-            node.Plane = plane;
-            node.Plus = new BSPNode(plus);
-            node.Minus = new BSPNode(minus);
-            node.SubMeshIndices = zeros;
-
-            // Create the NewVertices
-            if (newVertices.Count > 0)
-            {
-                int futureCount = vertices.Count + newVertices.Count;
-                vertices.Capacity = Mathf.Max(vertices.Capacity, futureCount);
-                normals.Capacity = Mathf.Max(normals.Capacity, futureCount);
-                if (tangents.Count > 0)
-                    tangents.Capacity = Mathf.Max(tangents.Capacity, futureCount);
-                if (uvs.Count > 0)
-                    uvs.Capacity = Mathf.Max(uvs.Capacity, futureCount);
-                
-                foreach (var newVertex in newVertices)
-                {
-                    vertices.Add(newVertex.Value(vertices));
-                    normals.Add(newVertex.Value(normals).normalized);
-                    if (tangents.Count > 0)
-                        tangents.Add(newVertex.Value(tangents).normalized);
-                    if (uvs.Count > 0)
-                        uvs.Add(newVertex.Value(uvs));
-                }
-            }
-        }
-
-        private void Split(IndicesList originalIndices, Plane plane, float precision, out IndicesList zeroIndices, out IndicesList plusIndices, out IndicesList minusIndices, out List<NewVertex> newVertices)
-        {
-            zeroIndices = new IndicesList(originalIndices.Count);
-            plusIndices = new IndicesList(originalIndices.Count);
-            minusIndices = new IndicesList(originalIndices.Count);
-            newVertices = new List<NewVertex>();
-
-            float[] distances = new float[] { 0, 0, 0 };
-            // Now Split !!!
-            for (int i = 0; i < originalIndices.Count; i++)
-            {
-                var subMesh = originalIndices[i];
-
-                var plusSubInd = new List<int>(subMesh.Count);
-                var zeroSubInd = new List<int>(subMesh.Count);
-                var minusSubInd = new List<int>(subMesh.Count);
-
-                for (int j = 0; j < subMesh.Count; j+=3)
-                {
-                    for (int k = 0; k < 3; k++)
-                    {
-                        distances[k] = plane.GetDistanceToPoint(vertices[subMesh[j + k]]);
-                        distances[k] = (Mathf.Abs(distances[k]) <= precision) ? 0 : distances[k];
-                    }
-
-                    // ZERO
-                    if (distances[0] == 0
-                        && distances[1] == 0
-                        && distances[2] == 0)
-                    {
-                        zeroSubInd.Add(subMesh[j]);
-                        zeroSubInd.Add(subMesh[j + 1]);
-                        zeroSubInd.Add(subMesh[j + 2]);
-                    }
-                    else // PLUS
-                    if (distances[0] >= 0 && distances[1] >= 0 && distances[2] >= 0)
-                    {
-                        plusSubInd.Add(subMesh[j]);
-                        plusSubInd.Add(subMesh[j + 1]);
-                        plusSubInd.Add(subMesh[j + 2]);
-                    }
-                    else // MINUS
-                    if (distances[0] <= 0 && distances[1] <= 0 && distances[2] <= 0)
-                    {
-                        minusSubInd.Add(subMesh[j]);
-                        minusSubInd.Add(subMesh[j + 1]);
-                        minusSubInd.Add(subMesh[j + 2]);
-                    }
-                    else // SPLITTING
-                    {
-                        // SPLIT IN 2 TRIANGLES
-                        if (distances[0] == 0 || distances[1] == 0 || distances[2] == 0)
-                        {
-                            int newIndex = vertices.Count + newVertices.Count;
-
-                            // which vert is alone on the plane ?
-                            // (At this point, there is one and only one vertex on plane !)
-                            int vertexOnPlane = distances[2] == 0 ? 2 : (distances[1] == 0 ? 1 : 0);
-                            int otherVertex1 = ((vertexOnPlane + 1) % 3);
-                            int otherVertex2 = ((vertexOnPlane + 2) % 3);
-
-                            float absDistanceOtherVertex1 = Mathf.Abs(distances[otherVertex1]);
-                            float delta = absDistanceOtherVertex1 / (absDistanceOtherVertex1 + Mathf.Abs(distances[otherVertex2]));
-                            newVertices.Add(new NewVertex(subMesh[j + otherVertex1], subMesh[j + otherVertex2], delta));
-
-                            //      |  <- plane splitting here
-                            //      A
-                            //    / | \
-                            //   /  |  \
-                            //  /   |   \
-                            // B ___|___ C
-                            //      |
-                            //
-                            //      |
-                            //      v
-                            //
-                            //      A
-                            //    / | \
-                            //   /  |  \
-                            //  /   |   \
-                            // B ___n___ C
-
-                            if (distances[otherVertex1] > 0)
-                            {
-                                plusSubInd.Add(subMesh[j + vertexOnPlane]);
-                                plusSubInd.Add(subMesh[j + otherVertex1]);
-                                plusSubInd.Add(newIndex);
-
-                                minusSubInd.Add(subMesh[j + vertexOnPlane]);
-                                minusSubInd.Add(newIndex);
-                                minusSubInd.Add(subMesh[j + otherVertex2]);
-                            }
-                            else
-                            {
-                                minusSubInd.Add(subMesh[j + vertexOnPlane]);
-                                minusSubInd.Add(subMesh[j + otherVertex1]);
-                                minusSubInd.Add(newIndex);
-
-                                plusSubInd.Add(subMesh[j + vertexOnPlane]);
-                                plusSubInd.Add(newIndex);
-                                plusSubInd.Add(subMesh[j + otherVertex2]);
-                            }
-                        }
-                        else // SPLIT IN 3 TRIANGLES
-                        {
-                            int[] newIndices = new int[2];
-                            newIndices[0] = vertices.Count + newVertices.Count;
-                            newIndices[1] = newIndices[0] + 1;
-
-                            // which vert is alone on one side of plane ?
-                            // (At this point, there is an alone vertex !)
-                            int aloneVertex = 0;
-                            if ((distances[0] > 0 && distances[1] > 0)
-                                || (distances[0] < 0 && distances[1] < 0))
-                            {
-                                aloneVertex = 2;
-                            }
-                            else
-                            if ((distances[0] > 0 && distances[2] > 0)
-                                || (distances[0] < 0 && distances[2] < 0))
-                            {
-                                aloneVertex = 1;
-                            }
-                            int otherVertex1 = ((aloneVertex + 1) % 3);
-                            int otherVertex2 = ((aloneVertex + 2) % 3);
-
-                            // prepare the two new vertices
-                            float absDistanceAloneVertex = Mathf.Abs(distances[aloneVertex]);
-                            float delta1 = absDistanceAloneVertex / (absDistanceAloneVertex + Mathf.Abs(distances[otherVertex1]));
-                            float delta2 = absDistanceAloneVertex / (absDistanceAloneVertex + Mathf.Abs(distances[otherVertex2]));
-                            newVertices.Capacity = System.Math.Max(newVertices.Count + 2, newVertices.Capacity);
-                            newVertices.Add(new NewVertex(subMesh[j + aloneVertex], subMesh[j + otherVertex1], delta1));
-                            newVertices.Add(new NewVertex(subMesh[j + aloneVertex], subMesh[j + otherVertex2], delta2));
-
-
-                            //      A
-                            //    /   \
-                            // - / --- \ ---- <- plane splitting here
-                            //  /       \
-                            // B _______ C
-                            //
-                            //      |
-                            //      v
-                            //
-                            //      A
-                            //    /   \
-                            //   n0 _ n1
-                            //  /   \   \
-                            // B _______ C
-
-                            if (distances[aloneVertex] >= 0)
-                            {
-                                plusSubInd.Add(subMesh[j + aloneVertex]);
-                                plusSubInd.Add(newIndices[0]);
-                                plusSubInd.Add(newIndices[1]);
-
-                                minusSubInd.Add(newIndices[1]);
-                                minusSubInd.Add(newIndices[0]);
-                                minusSubInd.Add(subMesh[j + otherVertex2]);
-
-                                minusSubInd.Add(subMesh[j + otherVertex2]);
-                                minusSubInd.Add(newIndices[0]);
-                                minusSubInd.Add(subMesh[j + otherVertex1]);
-                            }
-                            else
-                            {
-                                minusSubInd.Add(subMesh[j + aloneVertex]);
-                                minusSubInd.Add(newIndices[0]);
-                                minusSubInd.Add(newIndices[1]);
-
-                                plusSubInd.Add(newIndices[1]);
-                                plusSubInd.Add(newIndices[0]);
-                                plusSubInd.Add(subMesh[j + otherVertex2]);
-
-                                plusSubInd.Add(subMesh[j + otherVertex2]);
-                                plusSubInd.Add(newIndices[0]);
-                                plusSubInd.Add(subMesh[j + otherVertex1]);
-                            }
-                        }
-                    }
-                }
-
-                zeroIndices.Add(zeroSubInd);
-                plusIndices.Add(plusSubInd);
-                minusIndices.Add(minusSubInd);
-            }
-        }
-
-        private int SplitCost(IndicesList indices, Plane plane, float precision)
-        {
-            int cost = 0;
-            float[] distances = new float[] { 0, 0, 0 };
-            // Test Split !!!
-            for (int i = 0; i < indices.Count; i++)
-            {
-                var subMesh = indices[i];
-
-                for (int j = 0; j < subMesh.Count; j += 3)
-                {
-                    for (int k = 0; k < 3; k++)
-                    {
-                        distances[k] = plane.GetDistanceToPoint(vertices[subMesh[j + k]]);
-                        distances[k] = (Mathf.Abs(distances[k]) <= precision) ? 0 : distances[k];
-                    }
-
-                    if (!(distances[0] >= 0 && distances[1] >= 0 && distances[2] >= 0)
-                        && !(distances[0] <= 0 && distances[1] <= 0 && distances[2] <= 0))
-                    {
-                        if (distances[0] == 0 || distances[1] == 0 || distances[2] == 0)
-                            cost += 1;
-                        else
-                            cost += 2;
-                    }
-                }
-            }
-
-            return cost;
-        }
-
-        private Plane ChooseSplittingPlane(BSPNode node, int nbCandidates, float precision)
-        {
-            Plane bestCandidate = new Plane();
-            int bestResult = int.MaxValue;
-            for(int i = 0; i < nbCandidates && bestResult > 0; i++)
-            {
-                Plane candidate = ComputeSplittingPlane(node, Random.Range(0, node.TrianglesCount));
-                if (candidate.normal != Vector3.zero)
-                {
-                    int result = SplitCost(node.SubMeshIndices, candidate, precision);
-
-                    if (result < bestResult)
-                    {
-                        bestCandidate = candidate;
-                        bestResult = result;
-                    }
-                }
-            }
-            if (bestCandidate.normal == Vector3.zero)
-                throw new UnityException("Impossible to compute a plane at depth " + Depth + ". Try to increase precision or number of candidates.");
-
-            return bestCandidate;
-        }
-
-        private Plane ComputeSplittingPlane(BSPNode node, int triangle)
-        {
-            int subMeshIndex = 0;
-            int firstIndexInSubMesh = triangle * 3;
-            Debug.Assert(firstIndexInSubMesh < node.IndicesCount);
-            while (subMeshIndex < node.SubMeshCount && firstIndexInSubMesh > node[subMeshIndex].Count)
-            {
-                firstIndexInSubMesh -= node[subMeshIndex].Count;
-                subMeshIndex++;
-            }
-
-            var subMesh = node[subMeshIndex];
-            var v0 = vertices[subMesh[firstIndexInSubMesh]];
-            var v1 = vertices[subMesh[firstIndexInSubMesh+1]];
-            var v2 = vertices[subMesh[firstIndexInSubMesh+2]];
-
-            Plane plane = new Plane();
-            plane.Set3Points(v0, v1, v2);
-            return plane;
         }
     }
 }

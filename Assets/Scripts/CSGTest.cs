@@ -39,7 +39,7 @@ public class CSGTest : MonoBehaviour
 
         var materials = new List<Material>(); meshRenderer.GetSharedMaterials(materials);
         var start = System.DateTime.Now;
-        tree = new CSG.BSPTree(mesh, materials, maxTrianglesInLeaves, nbCandidates, precision);
+        tree = CSG.BSPTreeCreator.Construct(mesh, materials, maxTrianglesInLeaves, nbCandidates, precision);
         Debug.Log("BSPTree created in: " + (System.DateTime.Now - start).TotalMilliseconds + " ms");
         Debug.Log(tree);
         Mesh computedMesh = tree.ComputeMesh();
@@ -62,7 +62,7 @@ public class CSGTest : MonoBehaviour
 
         Profiler.BeginSample(gameObject.name + ".testProfile()", gameObject);
         var materials = new List<Material>(); meshRenderer.GetSharedMaterials(materials);
-        var tree = new CSG.BSPTree(mesh, materials, maxTrianglesInLeaves, nbCandidates, precision);
+        var tree = CSG.BSPTreeCreator.Construct(mesh, materials, maxTrianglesInLeaves, nbCandidates, precision);
         Profiler.EndSample();
 
         EditorApplication.ExitPlaymode();
