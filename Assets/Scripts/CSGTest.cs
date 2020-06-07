@@ -41,7 +41,7 @@ public class CSGTest : MonoBehaviour
         var start = System.DateTime.Now;
         tree = CSG.BSPTreeCreator.Construct(mesh, materials, maxTrianglesInLeaves, nbCandidates, precision);
         Debug.Log("BSPTree created in: " + (System.DateTime.Now - start).TotalMilliseconds + " ms");
-        Debug.Log(tree);
+        Debug.Log(tree.PrintString());
         Mesh computedMesh = tree.ComputeMesh();
 
         PrintMesh(computedMesh);

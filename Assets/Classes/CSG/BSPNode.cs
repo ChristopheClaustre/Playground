@@ -79,25 +79,29 @@ namespace CSG
             }
         }
 
-        public string ToString(string prefix = "")
+        public new string ToString()
         {
-            string result = "";
-
-            result += "+ Depth: " + Depth;
+            string result = "Depth: " + Depth;
             result += " | Inds: " + IndicesCount;
             result += " | Tris: " + TrianglesCount;
 
-            if (IsLeaf)
+            if (! IsLeaf)
             {
-                return prefix + result;
+                result += " | Plane: " + plane;
             }
 
-            result += " | Plane: " + plane;
+            return result;
+        }
 
-            string subprefix = prefix + "  ";
-            return prefix + result
-                + "\n" + (plus != null? plus.ToString(subprefix) : subprefix + "+ null")
-                + "\n" + (minus != null? minus.ToString(subprefix) : subprefix + "+ null");
+        public string PrintString(string prefix = "", string childPrefix = "")
+        {
+            string currentLine = prefix + ToString();
+            if (IsLeaf)
+                return currentLine;
+            
+            return currentLine
+                + "\n" +  plus.PrintString(childPrefix + "|-> ", childPrefix + "|   ")
+                + "\n" + minus.PrintString(childPrefix + "+-> ", childPrefix + "    ");
         }
 
         // -- CHILDREN & PARENT
