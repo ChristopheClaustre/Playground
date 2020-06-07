@@ -1,16 +1,13 @@
 ﻿using UnityEngine;
+using UnityEditor;
 using System.Collections.Generic;
-using System.Linq;
-
-using IndicesList = System.Collections.Generic.List<System.Collections.Generic.List<int>>;
 
 namespace CSG
 {
-    [System.Serializable]
-    public class BSPTree
+    public struct MeshData
     {
         // Struct to create later a new vertex
-        internal struct NewVertex
+        public struct NewVertex
         {
             int index0;
             int index1;
@@ -36,30 +33,14 @@ namespace CSG
             }
         }
 
-        BSPNode rootNode;
-        List<Material> materials;
+        internal List<Material> materials;
 
         internal List<Vector3> vertices;
-        List<Vector3> normals;
-        List<Vector4> tangents;
-        List<Vector2> uvs;
+        internal List<Vector3> normals;
+        internal List<Vector4> tangents;
+        internal List<Vector2> uvs;
 
-        public List<Material> Materials => materials;
-        public BSPNode RootNode => rootNode;
-        public int Depth => rootNode == null ? 0 : rootNode.Depth;
-
-        public BSPTree()
-        {
-            materials = null;
-            vertices = null;
-            normals = null;
-            tangents = null;
-            uvs = null;
-
-            rootNode = null;
-        }
-
-        internal void SetData(List<Vector3> inVertices, List<Vector3> inNormals, List<Vector4> inTangents, List<Vector2> inUVs, BSPNode inRootNode, List<Material> inMaterials)
+        public MeshData(List<Vector3> inVertices, List<Vector3> inNormals, List<Vector4> inTangents, List<Vector2> inUVs, List<Material> inMaterials)
         {
             vertices = inVertices;
             normals = inNormals;
@@ -67,11 +48,24 @@ namespace CSG
             uvs = inUVs;
 
             materials = inMaterials;
-
-            rootNode = inRootNode;
         }
 
-        internal void AddData(List<NewVertex> newVertices)
+        public MeshData(Mesh inMesh, List<Material> inMaterials)
+        {
+            vertices = new List<Vector3>();
+            normals = new List<Vector3>();
+            tangents = new List<Vector4>();
+            uvs = new List<Vector2>();
+
+            inMesh.GetVertices(vertices);
+            inMesh.GetNormals(normals);
+            inMesh.GetTangents(tangents);
+            inMesh.GetUVs(0, uvs);
+
+            materials = inMaterials;
+        }
+
+        public void AddData(List<NewVertex> newVertices)
         {
             int futureCount = vertices.Count + newVertices.Count;
             vertices.Capacity = Mathf.Max(vertices.Capacity, futureCount);
@@ -90,26 +84,6 @@ namespace CSG
                 if (uvs.Count > 0)
                     uvs.Add(newVertex.Value(uvs));
             }
-        }
-
-        public Mesh ComputeMesh()
-        {
-            IndicesList indices = rootNode.GetAllIndices();
-
-            Mesh mesh = new Mesh();
-            mesh.SetVertices(vertices);
-            mesh.SetNormals(normals);
-            mesh.SetTangents(tangents);
-            mesh.SetUVs(0,uvs);
-            for (int i = 0; i < indices.Count; i++)
-                mesh.SetTriangles(indices[i], i);
-
-            return mesh;
-        }
-
-        public override string ToString()
-        {
-            return "Depth: " + Depth + "\n" + rootNode.ToString();
         }
     }
 }

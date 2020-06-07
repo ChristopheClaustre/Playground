@@ -9,7 +9,7 @@ using UnityEditor;
 [RequireComponent(typeof(MeshRenderer))]
 public class CSGTest : MonoBehaviour
 {
-    public CSG.BSPTree tree;
+    public CSG.BSPNode tree;
     [Range(1, 2000)]
     public int maxTrianglesInLeaves = 1;
     [Range(5, 50)]

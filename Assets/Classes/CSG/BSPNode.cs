@@ -10,8 +10,15 @@ namespace CSG
     {
         Plane plane;
         IndicesList subMeshIndices; // indices organized by group of three representing a triangle
+        BSPNode parent;
         BSPNode plus;
         BSPNode minus;
+        MeshData meshData;
+
+        internal MeshData MeshData
+        {
+            get => meshData;
+        }
 
         public Plane Plane
         {
@@ -19,17 +26,32 @@ namespace CSG
             internal set => plane = value;
         }
 
-        // Leaf constructor
-        public BSPNode(IndicesList inSubMeshIndices)
+        public List<Material> Materials => meshData.materials;
+
+        public BSPNode()
         {
+            meshData = new MeshData();
+            subMeshIndices = null;
+
+            plane = new Plane();
+            parent = null;
+            plus = null;
+            minus = null;
+        }
+
+        internal BSPNode(BSPNode inParent, MeshData inMeshData, IndicesList inSubMeshIndices)
+        {
+            meshData = inMeshData;
             subMeshIndices = inSubMeshIndices;
 
             plane = new Plane();
+            parent = inParent;
             plus = null;
             minus = null;
         }
 
         public bool IsLeaf => plus == null && minus == null;
+        public bool IsRoot => parent == null;
 
         public int Depth
         {
@@ -41,6 +63,19 @@ namespace CSG
                 }
 
                 return 1 + Mathf.Max(plus == null? 0 : plus.Depth, minus == null ? 0 : minus.Depth);
+            }
+        }
+
+        public int DepthFromRoot
+        {
+            get
+            {
+                if (IsRoot)
+                {
+                    return 1;
+                }
+
+                return 1 + parent.DepthFromRoot;
             }
         }
 
@@ -65,8 +100,13 @@ namespace CSG
                 + "\n" + (minus != null? minus.ToString(subprefix) : subprefix + "+ null");
         }
 
-        // -- CHILDREN
+        // -- CHILDREN & PARENT
 
+        public BSPNode Parent
+        {
+            get => parent;
+            internal set => parent = value;
+        }
         public BSPNode Plus
         {
             get => plus;
@@ -113,6 +153,21 @@ namespace CSG
         }
 
         // UTILS METHODS
+
+        public Mesh ComputeMesh()
+        {
+            IndicesList indices = GetAllIndices();
+
+            Mesh mesh = new Mesh();
+            mesh.SetVertices(meshData.vertices);
+            mesh.SetNormals(meshData.normals);
+            mesh.SetTangents(meshData.tangents);
+            mesh.SetUVs(0, meshData.uvs);
+            for (int i = 0; i < indices.Count; i++)
+                mesh.SetTriangles(indices[i], i);
+
+            return mesh;
+        }
 
         // Get all indices lists including children's indices
         public IndicesList GetAllIndices()

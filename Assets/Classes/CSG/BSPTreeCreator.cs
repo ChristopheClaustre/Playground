@@ -3,24 +3,14 @@ using System.Collections.Generic;
 using System.Linq;
 
 using IndicesList = System.Collections.Generic.List<System.Collections.Generic.List<int>>;
-using static CSG.BSPTree;
+using static CSG.MeshData;
 
 namespace CSG
 {
     public static class BSPTreeCreator
     {
-        public static BSPTree Construct(Mesh inMesh, List<Material> inMaterials, int maxTrianglesInLeaves = 1, int nbCandidates = 5, float precision = 1E-06f)
+        public static BSPNode Construct(Mesh inMesh, List<Material> inMaterials, int maxTrianglesInLeaves = 1, int nbCandidates = 5, float precision = 1E-06f)
         {
-            var vertices = new List<Vector3>();
-            var normals = new List<Vector3>();
-            var tangents = new List<Vector4>();
-            var uvs = new List<Vector2>();
-
-            inMesh.GetVertices(vertices);
-            inMesh.GetNormals(normals);
-            inMesh.GetTangents(tangents);
-            inMesh.GetUVs(0, uvs);
-
             // retrieve indices by submesh index
             IndicesList subMeshIndices = new IndicesList(inMesh.subMeshCount);
             for (int i = 0; i < inMesh.subMeshCount; i++)
@@ -29,18 +19,15 @@ namespace CSG
                 subMeshIndices.Add(inMesh.GetTriangles(i).ToList());
             }
 
-            var rootNode = new BSPNode(subMeshIndices);
-
-            BSPTree tree = new BSPTree();
-            tree.SetData(vertices, normals, tangents, uvs, rootNode, inMaterials);
-            tree.ConstructInternal(rootNode, maxTrianglesInLeaves, nbCandidates, precision);
-
-            return tree;
+            var rootNode = new BSPNode(null, new MeshData(inMesh, inMaterials), subMeshIndices);
+            rootNode.ConstructInternal(maxTrianglesInLeaves, nbCandidates, precision);
+            
+            return rootNode;
         }
 
         // -- UTILS' METHODS FOR THE GENERATION OF A BSPTREE
 
-        private static bool ConstructInternal(this BSPTree tree, BSPNode node, int maxTrianglesInLeaves, int nbCandidates, float precision)
+        private static bool ConstructInternal(this BSPNode node, int maxTrianglesInLeaves, int nbCandidates, float precision)
         {
             if (node == null || node.TrianglesCount <= maxTrianglesInLeaves)
             {
@@ -48,25 +35,25 @@ namespace CSG
             }
 
             // Compute split
-            Plane plane = node.ChooseSplittingPlane(tree.vertices, nbCandidates, precision);
+            Plane plane = node.ChooseSplittingPlane(nbCandidates, precision);
             if (plane.normal == Vector3.zero)
             {
-                Debug.Log("Impossible to compute a plane at depth " + tree.Depth + ". Try to increase precision or number of candidates.");
+                Debug.Log("Impossible to compute a plane at depth " + node.DepthFromRoot + ". Try to increase precision or number of candidates.");
                 return false;
             }
-            Split(node.SubMeshIndices, plane, tree.vertices, precision, out var zeros, out var plus, out var minus, out var newVertices);
+            Split(node.SubMeshIndices, plane, node.MeshData.vertices, precision, out var zeros, out var plus, out var minus, out var newVertices);
 
             // Apply split
             node.Plane = plane;
-            node.Plus = new BSPNode(plus);
-            node.Minus = new BSPNode(minus);
+            node.Plus = new BSPNode(node, node.MeshData, plus);
+            node.Minus = new BSPNode(node, node.MeshData, minus);
             node.SubMeshIndices = zeros;
-            tree.AddData(newVertices);
+            node.MeshData.AddData(newVertices);
 
             // recurse
             bool result = true;
-            result &= tree.ConstructInternal(node.Plus, maxTrianglesInLeaves, nbCandidates, precision);
-            result &= tree.ConstructInternal(node.Minus, maxTrianglesInLeaves, nbCandidates, precision);
+            result &= node.Plus.ConstructInternal(maxTrianglesInLeaves, nbCandidates, precision);
+            result &= node.Minus.ConstructInternal(maxTrianglesInLeaves, nbCandidates, precision);
             return result;
         }
 
@@ -289,16 +276,16 @@ namespace CSG
             return cost;
         }
 
-        private static Plane ChooseSplittingPlane(this BSPNode node, List<Vector3> vertices, int nbCandidates, float precision)
+        private static Plane ChooseSplittingPlane(this BSPNode node, int nbCandidates, float precision)
         {
             Plane bestCandidate = new Plane();
             int bestResult = int.MaxValue;
             for(int i = 0; i < nbCandidates && bestResult > 0; i++)
             {
-                Plane candidate = node.ComputeSplittingPlane(vertices, Random.Range(0, node.TrianglesCount));
+                Plane candidate = node.ComputeSplittingPlane(Random.Range(0, node.TrianglesCount));
                 if (candidate.normal != Vector3.zero)
                 {
-                    int result = SplitCost(node.SubMeshIndices, candidate, vertices, precision);
+                    int result = SplitCost(node.SubMeshIndices, candidate, node.MeshData.vertices, precision);
 
                     if (result < bestResult)
                     {
@@ -311,7 +298,7 @@ namespace CSG
             return bestCandidate;
         }
 
-        private static Plane ComputeSplittingPlane(this BSPNode node, List<Vector3> vertices, int triangle)
+        private static Plane ComputeSplittingPlane(this BSPNode node, int triangle)
         {
             int subMeshIndex = 0;
             int firstIndexInSubMesh = triangle * 3;
@@ -323,9 +310,9 @@ namespace CSG
             }
 
             var subMesh = node[subMeshIndex];
-            var v0 = vertices[subMesh[firstIndexInSubMesh]];
-            var v1 = vertices[subMesh[firstIndexInSubMesh+1]];
-            var v2 = vertices[subMesh[firstIndexInSubMesh+2]];
+            var v0 = node.MeshData.vertices[subMesh[firstIndexInSubMesh]];
+            var v1 = node.MeshData.vertices[subMesh[firstIndexInSubMesh+1]];
+            var v2 = node.MeshData.vertices[subMesh[firstIndexInSubMesh+2]];
 
             Plane plane = new Plane();
             plane.Set3Points(v0, v1, v2);
